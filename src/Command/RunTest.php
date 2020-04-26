@@ -27,7 +27,7 @@ class RunTest extends Command
         $this->setName('run');
         $this->setHelp("run benchmark test");
         $this->setDescription("Run benchmark test.");
-        $this->addUsage('e.g: ./main -c 100 -r 10000 127.0.0.1:9501 length');
+        $this->addUsage('e.g: ./main run -c 100 -r 10000 127.0.0.1:9501 length');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)

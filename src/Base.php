@@ -98,16 +98,17 @@ class Base
         $connectTime = $this->format($this->connectTime);
 
         $output = '';
-        $output .= "Concurrency Level:      {$this->nConcurrency}";
-        $output .= "\nTime taken for tests:   {$costTime} seconds";
-        $output .= "\nComplete requests:      {$nRequest}";
-        $output .= "\nFailed requests:        " . $this->prettifyNumber($requestErrorCount);
-        $output .= "\nConnect failed:         {$connectErrorCount}";
-        $output .= "\nTotal send:             {$nSendBytes} bytes";
-        $output .= "\nTotal reveive:          {$nRecvBytes} bytes";
-        $output .= "\nRequests per second:    {$requestPerSec}";
-        $output .= "\nConnection time:        {$connectTime} seconds";
-        $output .= "\nContent Error:          " . $this->prettifyNumber($this->contentErrorCount);
+        $output = "Swoole version:\t\t" . swoole_version();
+        $output .= "\nConcurrency Level:\t{$this->nConcurrency}";
+        $output .= "\nTime taken for tests:\t{$costTime} seconds";
+        $output .= "\nComplete requests:\t{$nRequest}";
+        $output .= "\nFailed requests:\t" . $this->prettifyNumber($requestErrorCount);
+        $output .= "\nConnect failed:\t\t{$connectErrorCount}";
+        $output .= "\nTotal send:\t\t{$nSendBytes} bytes";
+        $output .= "\nTotal reveive:\t\t{$nRecvBytes} bytes";
+        $output .= "\nRequests per second:\t{$requestPerSec}";
+        $output .= "\nConnection time:\t{$connectTime} seconds";
+        $output .= "\nContent Error:\t\t" . $this->prettifyNumber($this->contentErrorCount);
         $output .= "\n";
         echo $output;
     }
