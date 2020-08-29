@@ -1,11 +1,7 @@
 <?php
-$table = new swoole_table(8 * 1024 * 1024);
-$table->column('id', swoole_table::TYPE_INT, 4);
-$table->column('name', swoole_table::TYPE_STRING, 256);
-$table->column('num', swoole_table::TYPE_FLOAT);
-$table->create();
 
-define('N', 1000000);
+
+define('N', 300000);
 define('C', 4);
 
 if (empty($argv[1])) {
@@ -16,9 +12,17 @@ if (empty($argv[1])) {
     $test_func();
 }
 
+function create_big_table() {
+    $table = new swoole_table(8 * 1024 * 1024);
+    $table->column('id', swoole_table::TYPE_INT, 4);
+    $table->column('name', swoole_table::TYPE_STRING, 256);
+    $table->column('num', swoole_table::TYPE_FLOAT);
+    $table->create();
+}
+
 function test1()
 {
-    global $table;
+    $table = create_big_table();
 
     /**
      * table_size = 1M
@@ -36,7 +40,7 @@ function test1()
 
 function test2()
 {
-    global $table;
+    $table = create_big_table();
     $n = N;
     $s = microtime(true);
     while ($n--) {
@@ -48,10 +52,10 @@ function test2()
 
 function test3()
 {
+    $table = create_big_table();
     for ($i = C; $i--;) {
         (new swoole_process(
-            function () use ($i) {
-                global $table;
+            function () use ($i, $table) {
                 $n = N;
                 $s = microtime(true);
                 while ($n--) {
@@ -69,10 +73,10 @@ function test3()
 
 function test4()
 {
+    $table = create_big_table();
     for ($i = C; $i--;) {
         (new swoole_process(
-            function () use ($i) {
-                global $table;
+            function () use ($i, $table) {
                 $n = N;
                 $s = microtime(true);
                 while ($n--) {
@@ -93,7 +97,7 @@ function test4()
 
 function table_random_read()
 {
-    global $table;
+    $table = create_big_table();
 
     $s1 = microtime(true);
     $n = N;
@@ -150,7 +154,7 @@ function table_random_read()
  */
 function table_random_key()
 {
-    global $table;
+    $table = create_big_table();
 
     $keys = [];
     $s1 = microtime(true);
@@ -229,7 +233,7 @@ function array_random_key()
  */
 function table_random_int_key()
 {
-    global $table;
+    $table = create_big_table();
 
     $keys = [];
     $s1 = microtime(true);
@@ -267,13 +271,26 @@ function table_random_int_key()
     echo "Table::get() [random_key], time=" . ($s3 - $s2) . "s\n";
 }
 
+function shuffle_assoc(&$array) {
+    $keys = array_keys($array);
+
+    shuffle($keys);
+
+    foreach($keys as $key) {
+        $new[$key] = $array[$key];
+    }
+
+    $array = $new;
+
+    return true;
+}
 
 /**
  * @throws Exception
  */
 function table_random_int_key_delete()
 {
-    global $table;
+    $table = create_big_table();
 
     $keys = [];
     $s1 = microtime(true);
@@ -304,6 +321,7 @@ function table_random_int_key_delete()
      * 获取数据
      */
     echo "GET ".N." keys\n";
+    shuffle_assoc($keys);
     foreach ($keys as $k => $v) {
         $str = $table->get($k);
         if ($str == false) {
@@ -316,13 +334,13 @@ function table_random_int_key_delete()
     }
 
     $s3 = microtime(true);
-    echo "Table::set() [random_int_key], time=" . ($s3 - $s2) . "s\n";
+    echo "Table::get() [random_int_key], time=" . ($s3 - $s2) . "s\n";
 
     /**
      * 删除数据
      */
-    echo "DEL ".N." keys\n";
     $n = N / 10;
+    echo "DEL ".$n." keys\n";
     $del_keys = [];
     while ($n--) {
         $k = array_rand($keys);
@@ -339,4 +357,41 @@ function table_random_int_key_delete()
 
     $s4 = microtime(true);
     echo "Table::del() [random_int_key], time=" . ($s4 - $s3) . "s\n";
+}
+
+function table_delete_and_incr()
+{
+    $table = new \Swoole\Table(256 * 1024);
+    $table->column('request_count', swoole_table::TYPE_INT);
+    $table->column('howlong', swoole_table::TYPE_FLOAT);
+    $table->create();
+
+    var_dump($table->getMemorySize());
+    $KEY_COUNT = 100000;
+
+    // Init Table
+    for ($i = 0; $i < $KEY_COUNT; $i++) {
+        $key = 'key_' . $i;
+        $table->set($key, ['request_count' => rand(1000, 9999), 'howlong' => rand(1000, 9999)]);
+    }
+
+    var_dump($table->count());
+
+    $del_keys = [];
+    $n = 1000_0000;
+    while ($n--) {
+        $key = 'key_' . rand(0, $KEY_COUNT);
+        // Del Key
+        if (rand(0, 99999) % 10 == 1) {
+            $table->del($key);
+            $del_keys[$key] = 1;
+        } else {
+            // create or delete
+            if (rand(0, 99999) % 5 == 1 and count($del_keys) > 0) {
+                $key = array_rand($del_keys);
+                unset($del_keys[$key]);
+            }
+            $table->incr($key, 'request_count');
+        }
+    }
 }
