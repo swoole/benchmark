@@ -2,9 +2,11 @@
   "autoload": {
     "psr-4": {
       "SwooleBench\\": "src/"
-    }
+    },
+    "files": ["src/functions.php"]
   },
   "require": {
-    "symfony/console": "^4.3"
+    "symfony/console": "^4.3",
+    "guzzlehttp/guzzle": "^7.3"
   }
 }
