@@ -1,8 +1,11 @@
 <?php
 
 
-define('N', 300000);
-define('C', 4);
+const N = 300000;
+const C = 4;
+
+use Swoole\Process;
+use Swoole\Table;
 
 if (empty($argv[1])) {
     echo "Usage: php {$argv[0]} [test_func]\n";
@@ -12,12 +15,15 @@ if (empty($argv[1])) {
     $test_func();
 }
 
-function create_big_table() {
-    $table = new swoole_table(8 * 1024 * 1024);
-    $table->column('id', swoole_table::TYPE_INT, 4);
-    $table->column('name', swoole_table::TYPE_STRING, 256);
-    $table->column('num', swoole_table::TYPE_FLOAT);
+function create_big_table()
+{
+    $table = new Table(8 * 1024 * 1024);
+    $table->column('id', Table::TYPE_INT, 4);
+    $table->column('name', Table::TYPE_STRING, 256);
+    $table->column('num', Table::TYPE_FLOAT);
     $table->create();
+
+    return $table;
 }
 
 function test1()
@@ -214,7 +220,7 @@ function array_random_key()
     while ($n--) {
         $i = array_rand($keys);
         $k = $keys[$i];
-        $str =  $array[$k];
+        $str = $array[$k];
         if ($str == false) {
             echo "key[$i] not exists\n";
         }
@@ -271,12 +277,13 @@ function table_random_int_key()
     echo "Table::get() [random_key], time=" . ($s3 - $s2) . "s\n";
 }
 
-function shuffle_assoc(&$array) {
+function shuffle_assoc(&$array)
+{
     $keys = array_keys($array);
 
     shuffle($keys);
 
-    foreach($keys as $key) {
+    foreach ($keys as $key) {
         $new[$key] = $array[$key];
     }
 
@@ -299,7 +306,7 @@ function table_random_int_key_delete()
     /**
      * 插入数据
      */
-    echo "SET ".N." keys\n";
+    echo "SET " . N . " keys\n";
     while ($n--) {
         $k = rand(1, 1000000000);
         $result = $table->set(
@@ -320,7 +327,7 @@ function table_random_int_key_delete()
     /**
      * 获取数据
      */
-    echo "GET ".N." keys\n";
+    echo "GET " . N . " keys\n";
     shuffle_assoc($keys);
     foreach ($keys as $k => $v) {
         $str = $table->get($k);
@@ -340,7 +347,7 @@ function table_random_int_key_delete()
      * 删除数据
      */
     $n = N / 10;
-    echo "DEL ".$n." keys\n";
+    echo "DEL " . $n . " keys\n";
     $del_keys = [];
     while ($n--) {
         $k = array_rand($keys);
@@ -353,7 +360,7 @@ function table_random_int_key_delete()
         }
     }
 
-    echo 'DEL='.count($del_keys).', KEYS='.count($keys).', COUNT='.$table->count()."\n";
+    echo 'DEL=' . count($del_keys) . ', KEYS=' . count($keys) . ', COUNT=' . $table->count() . "\n";
 
     $s4 = microtime(true);
     echo "Table::del() [random_int_key], time=" . ($s4 - $s3) . "s\n";
@@ -361,9 +368,9 @@ function table_random_int_key_delete()
 
 function table_delete_and_incr()
 {
-    $table = new \Swoole\Table(256 * 1024);
-    $table->column('request_count', swoole_table::TYPE_INT);
-    $table->column('howlong', swoole_table::TYPE_FLOAT);
+    $table = new Table(256 * 1024);
+    $table->column('request_count', Table::TYPE_INT);
+    $table->column('howlong', Table::TYPE_FLOAT);
     $table->create();
 
     var_dump($table->getMemorySize());
@@ -398,7 +405,7 @@ function table_delete_and_incr()
 
 function table_parallel_delete()
 {
-    $table = new Swoole\Table(131072);
+    $table = new Table(131072);
     $table->column('col0', Swoole\Table::TYPE_INT, 4);
     $table->column('col1', Swoole\Table::TYPE_INT, 4);
     $table->column('col100', Swoole\Table::TYPE_INT, 8);
@@ -445,8 +452,10 @@ function table_parallel_delete()
     echo "实际共享内存: " . $table->count() . "个key\n";
 
     $workerNum = C;
+    $NUM = N;
+
     while ($workerNum--) {
-        (new Swoole\Process(function () use ($table, $workerNum, $NUM) {
+        (new Process(function () use ($table, $workerNum, $NUM) {
             //【请手动调整这个值，从小到大】
             // 从共享内存中删除的key的个数，保证每个worker都删除同样的key，
             // 当这个值日从小增大到5000+ 以后，删除key的结果变得越来越不稳定，大于65000后，结果很诡异
@@ -456,7 +465,7 @@ function table_parallel_delete()
                 $table->del("u" . $i);
             }
             $expectNum = $num_to_del > $NUM ? 0 : $NUM - $num_to_del;
-            echo "worker " . $workerNum . " 从共享内存删除" . $num_to_del . "个key后， 期望剩余${expectNum}实际共享内存还剩"
+            echo "worker " . $workerNum . " 从共享内存删除" . $num_to_del . "个key后， 期望剩余{$expectNum}实际共享内存还剩"
                 . $table->count() . "个key, 用时：" . (microtime(true) - $s) . "\n";
         }))->start();
     }
@@ -467,4 +476,66 @@ function table_parallel_delete()
     }
     echo "实际共享内存: " . $table->count() . "个key\n";
     $table->destroy();
+}
+
+function random_rw()
+{
+    ini_set('memory_limit', '1024M');
+    $table = create_big_table();
+    $n = N;
+
+    $array = [];
+    while ($n--) {
+        $keys[] = random_bytes(random_int(1, 63));
+    }
+    echo "gen random keys done\n";
+
+    // 保存 keys 以便于 debug
+    file_put_contents('/tmp/table_keys', serialize($keys));
+
+    foreach($keys as $key) {
+        $array[$key] = random_bytes(random_int(1, 255));
+    }
+
+    echo "gen random values done\n";
+    $st = microtime(true);
+
+    $workerNum = C;
+    while ($workerNum--) {
+        (new Process(function () use ($table, $array, $keys) {
+            $n = 100_000_000;
+            while ($n--) {
+                $seed = random_int(1, 999999999);
+                $key = $keys[array_rand($keys)];
+                if (!$table->exists($key)) {
+                    $retval = $table->set($key, ['name' => $array[$key]]);
+                    if ($retval === false) {
+                        echo "failed\n";
+                    }
+                } else {
+                    $table->set($key, ['id' => $seed, 'name' => $array[$key]]);
+                }
+                if ($seed % 40 == 1) {
+                    $table->del($key);
+                } else {
+                    $elem = $table->get($key);
+                    if ($elem) {
+                        if ($elem['name'] != $array[$key]) {
+                            var_dump('diff', bin2hex($elem['name']), bin2hex($array[$key]));
+                            var_dump($elem);
+                            echo "error\n";
+                        }
+                    }
+                }
+            }
+
+        }))->start();
+    }
+
+    $workerNum = C;
+    while ($workerNum--) {
+        Process::wait();
+    }
+
+    echo "usage: " . (microtime(true) - $st) . "\n";
 }
